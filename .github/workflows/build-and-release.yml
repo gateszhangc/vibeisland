@@ -26,6 +26,9 @@ jobs:
       BUILD_JOB_SECRET: fleet-registry-push
       IMAGE_REPOSITORY: registry.144.91.77.245.sslip.io/vibeisland
       KUSTOMIZATION_PATH: deploy/k8s/overlays/prod/kustomization.yaml
+      PRIMARY_URL: https://vibeisland.lol/
+      SITEMAP_URL: https://vibeisland.lol/sitemap.xml
+      WWW_URL: https://www.vibeisland.lol/
     steps:
       - name: Check out code
         uses: actions/checkout@v4
@@ -103,23 +106,53 @@ jobs:
           git commit -m "chore: release ${IMAGE_TAG} [skip ci]"
           git push origin HEAD:${APP_BRANCH}
 
-      - name: Apply Argo CD project and application
+      - name: Apply shared cluster resources and Argo CD application
         run: |
+          kubectl apply -f deploy/shared/cert-manager/sealedsecret-cloudflare-api-token.yaml
           kubectl apply -f deploy/argocd/project.yaml
           kubectl apply -f deploy/argocd/application.yaml
 
-      - name: Wait for Argo CD sync
+      - name: Wait for Argo CD sync and verify live endpoints
         env:
           APP_NAME: ${{ env.APP_NAME }}
+          APP_NAMESPACE: ${{ env.APP_NAMESPACE }}
+          PRIMARY_URL: ${{ env.PRIMARY_URL }}
+          SITEMAP_URL: ${{ env.SITEMAP_URL }}
+          WWW_URL: ${{ env.WWW_URL }}
         run: |
+          synced=false
           for attempt in $(seq 1 60); do
             sync_status="$(kubectl -n argocd get application "$APP_NAME" -o jsonpath='{.status.sync.status}' 2>/dev/null || true)"
             health_status="$(kubectl -n argocd get application "$APP_NAME" -o jsonpath='{.status.health.status}' 2>/dev/null || true)"
-            if [ "$sync_status" = "Synced" ] && [ "$health_status" = "Healthy" ]; then
-              echo "Application is synced and healthy."
-              exit 0
+            echo "attempt=$attempt sync=$sync_status health=$health_status"
+            if [ "$sync_status" = "Synced" ]; then
+              synced=true
+              break
             fi
             sleep 10
           done
+          if [ "$synced" != "true" ]; then
+            kubectl -n argocd get application "$APP_NAME" -o yaml
+            exit 1
+          fi
+          kubectl -n "$APP_NAMESPACE" rollout status deployment/"$APP_NAME" --timeout=5m
+          primary_status="$(curl -sSIL -o /dev/null -w '%{http_code}' "$PRIMARY_URL")"
+          if [ "$primary_status" != "200" ]; then
+            echo "primary url check failed: $PRIMARY_URL -> $primary_status"
+            exit 1
+          fi
+          sitemap_status="$(curl -sSIL -o /dev/null -w '%{http_code}' "$SITEMAP_URL")"
+          if [ "$sitemap_status" != "200" ]; then
+            echo "sitemap check failed: $SITEMAP_URL -> $sitemap_status"
+            exit 1
+          fi
+          www_headers="$(mktemp)"
+          curl -sSI "$WWW_URL" > "$www_headers"
+          if ! grep -Eiq '^location: https://vibeisland\.lol(:443)?/?' "$www_headers"; then
+            echo "www redirect check failed"
+            cat "$www_headers"
+            rm -f "$www_headers"
+            exit 1
+          fi
+          rm -f "$www_headers"
           kubectl -n argocd get application "$APP_NAME" -o yaml
-          exit 1
