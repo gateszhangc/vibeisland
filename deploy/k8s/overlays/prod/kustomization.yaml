@@ -6,4 +6,4 @@ resources:
   - ingress-preview.yaml
 images:
   - name: registry.144.91.77.245.sslip.io/vibeisland
-    newTag: ae96511e39c6d7348870696bb34001a5f12288e8
+    newTag: cc33306720f64c94bcf4c32a71165e9227e00d1b
