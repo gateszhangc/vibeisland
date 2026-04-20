@@ -7,4 +7,4 @@ resources:
   - ingress-www-redirect.yaml
 images:
   - name: registry.144.91.77.245.sslip.io/vibeisland
-    newTag: bootstrap
+    newTag: 846651cc43757d336c67a4b73d5819cad6ddb361
