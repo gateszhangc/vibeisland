@@ -1,10 +1,11 @@
 {
-  "name": "artemis-2-wallpaper",
+  "name": "vibeisland-site",
   "version": "1.0.0",
   "private": true,
-  "description": "Static Artemis II wallpaper site built from publicly released NASA imagery.",
+  "description": "Static Vibe Island marketing site.",
   "scripts": {
     "start": "node server.js",
+    "brand": "python3 scripts/generate_brand_assets.py",
     "test": "playwright test",
     "test:browser": "playwright test"
   },

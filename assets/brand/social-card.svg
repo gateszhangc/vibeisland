@@ -1,0 +1,58 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="78" y1="44" x2="1103" y2="612" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#081518"/>
+      <stop offset="0.5" stop-color="#0D2025"/>
+      <stop offset="1" stop-color="#060E12"/>
+    </linearGradient>
+    <linearGradient id="line" x1="780" y1="111" x2="1040" y2="359" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8EF0D1"/>
+      <stop offset="1" stop-color="#59BEE8"/>
+    </linearGradient>
+    <linearGradient id="sun" x1="838" y1="220" x2="984" y2="267" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFD18D"/>
+      <stop offset="1" stop-color="#FF9C72"/>
+    </linearGradient>
+    <filter id="blur" x="694" y="57" width="373" height="414" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" rx="42" fill="url(#bg)"/>
+  <path d="M84 92H1116" stroke="rgba(255,255,255,0.06)" stroke-width="2"/>
+  <path d="M84 538H1116" stroke="rgba(255,255,255,0.06)" stroke-width="2"/>
+  <path d="M84 0V630" stroke="rgba(255,255,255,0.03)" stroke-width="2"/>
+  <path d="M1116 0V630" stroke="rgba(255,255,255,0.03)" stroke-width="2"/>
+
+  <circle cx="108" cy="92" r="6" fill="#8EF0D1"/>
+  <circle cx="126" cy="92" r="6" fill="#59BEE8"/>
+  <circle cx="144" cy="92" r="6" fill="#FF9C72"/>
+
+  <text x="94" y="178" fill="#8EF0D1" font-family="Verdana, Arial, sans-serif" font-size="18" letter-spacing="6">NATIVE MACOS COMPANION</text>
+  <text x="94" y="286" fill="#F1FBFB" font-family="Verdana, Arial, sans-serif" font-size="84" font-weight="700">Vibe Island</text>
+  <text x="94" y="360" fill="#B3D2D3" font-family="Verdana, Arial, sans-serif" font-size="34">Dynamic island control room for AI coding agents.</text>
+  <text x="94" y="415" fill="#B3D2D3" font-family="Verdana, Arial, sans-serif" font-size="28">Monitor sessions, approve actions, answer questions, and jump back.</text>
+
+  <rect x="94" y="478" width="250" height="58" rx="29" fill="rgba(142,240,209,0.12)" stroke="rgba(142,240,209,0.28)"/>
+  <text x="130" y="515" fill="#F1FBFB" font-family="Verdana, Arial, sans-serif" font-size="24">Claude Code / Codex / Cursor</text>
+
+  <g filter="url(#blur)">
+    <rect x="726" y="102" width="392" height="332" rx="42" fill="rgba(6,14,17,0.82)" stroke="rgba(255,255,255,0.08)"/>
+    <rect x="812" y="116" width="220" height="18" rx="9" fill="#020607"/>
+    <rect x="770" y="152" width="134" height="34" rx="17" fill="rgba(142,240,209,0.12)" stroke="rgba(142,240,209,0.28)"/>
+    <text x="800" y="173" fill="#F1FBFB" font-family="Verdana, Arial, sans-serif" font-size="15">Live sessions</text>
+
+    <rect x="770" y="204" width="304" height="118" rx="28" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)"/>
+    <text x="796" y="240" fill="#8EF0D1" font-family="Verdana, Arial, sans-serif" font-size="14" letter-spacing="4">PERMISSION REQUEST</text>
+    <text x="796" y="278" fill="#F1FBFB" font-family="Verdana, Arial, sans-serif" font-size="24">Approve middleware edit</text>
+    <text x="796" y="308" fill="#B3D2D3" font-family="Verdana, Arial, sans-serif" font-size="16">13+ if (!token) throw new AuthError("missing")</text>
+
+    <path d="M837 257C852 236 876 224 903 224C930 224 954 236 969 257" stroke="url(#sun)" stroke-width="12" stroke-linecap="round"/>
+    <path d="M797 350C838 320 968 320 1009 350" stroke="url(#line)" stroke-width="18" stroke-linecap="round"/>
+    <path d="M842 384C870 370 936 370 964 384" stroke="#CFFFF1" stroke-width="7" stroke-linecap="round"/>
+  </g>
+</svg>

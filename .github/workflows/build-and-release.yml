@@ -7,92 +7,119 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: artemis-2-wallpaper-release
+  group: vibeisland-release
   cancel-in-progress: true
 
-env:
-  IMAGE_NAME: registry.144.91.77.245.sslip.io/dokploy-fleet-artemis-2-wallpaper-artemis-2-wallpaper
-  FLEET_REPO: gateszhangc/k8s-fleet
-  FLEET_TENANT_PATH: tenants/artemis-2-wallpaper/20-artemis-2-wallpaper-deployment.yaml
-
 jobs:
-  build-and-push:
+  build-and-release:
+    if: github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip ci]')
     runs-on: ubuntu-latest
-    outputs:
-      image_tag: ${{ steps.meta.outputs.image_tag }}
+    env:
+      APP_NAME: vibeisland
+      APP_NAMESPACE: vibeisland
+      APP_REPO_URL: https://github.com/gateszhangc/vibeisland.git
+      APP_BRANCH: main
+      BUILD_JOB_NAMESPACE: dokploy-fleet-build
+      BUILD_JOB_SECRET: fleet-registry-push
+      IMAGE_REPOSITORY: registry.144.91.77.245.sslip.io/vibeisland
+      KUSTOMIZATION_PATH: deploy/k8s/overlays/prod/kustomization.yaml
     steps:
       - name: Check out code
         uses: actions/checkout@v4
-
-      - name: Derive image tag
-        id: meta
-        run: echo "image_tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to registry
-        uses: docker/login-action@v3
         with:
-          registry: registry.144.91.77.245.sslip.io
-          username: ${{ secrets.REGISTRY_USERNAME }}
-          password: ${{ secrets.REGISTRY_PASSWORD }}
+          fetch-depth: 0
 
-      - name: Build and push image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.image_tag }}
-
-  update-fleet:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out fleet repo
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ env.FLEET_REPO }}
-          token: ${{ secrets.FLEET_REPO_PAT }}
-          path: k8s-fleet
-
-      - name: Update deployment image tag
+      - name: Configure kubectl
         env:
-          IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
+        run: |
+          test -n "$KUBECONFIG_B64"
+          mkdir -p "$HOME/.kube"
+          echo "$KUBECONFIG_B64" | base64 --decode > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+          kubectl version --client
+          kubectl cluster-info
+
+      - name: Derive build metadata
+        id: meta
+        run: |
+          short_sha="${GITHUB_SHA::12}"
+          echo "image_tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "build_job_name=${APP_NAME}-build-${short_sha}" >> "$GITHUB_OUTPUT"
+          echo "git_context=git://github.com/${GITHUB_REPOSITORY}.git#refs/heads/${GITHUB_REF_NAME}#${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Run K8s build job
+        env:
+          BUILD_JOB_NAME: ${{ steps.meta.outputs.build_job_name }}
+          BUILD_CONTEXT: ${{ steps.meta.outputs.git_context }}
+          BUILD_IMAGE: ${{ env.IMAGE_REPOSITORY }}:${{ steps.meta.outputs.image_tag }}
+          BUILD_JOB_NAMESPACE: ${{ env.BUILD_JOB_NAMESPACE }}
+          BUILD_JOB_SECRET: ${{ env.BUILD_JOB_SECRET }}
+        run: |
+          kubectl delete job -n "$BUILD_JOB_NAMESPACE" "$BUILD_JOB_NAME" --ignore-not-found=true
+          ./scripts/render_kaniko_build_job.sh > /tmp/kaniko-job.yaml
+          kubectl apply -f /tmp/kaniko-job.yaml
+          kubectl wait -n "$BUILD_JOB_NAMESPACE" --for=condition=complete "job/$BUILD_JOB_NAME" --timeout=30m
+          kubectl logs -n "$BUILD_JOB_NAMESPACE" "job/$BUILD_JOB_NAME" --tail=-1 || true
+
+      - name: Update production image tag
+        env:
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+          KUSTOMIZATION_PATH: ${{ env.KUSTOMIZATION_PATH }}
         run: |
           python3 - <<'PY'
           import os
           import re
           from pathlib import Path
 
-          path = Path("k8s-fleet") / os.environ["FLEET_TENANT_PATH"]
+          path = Path(os.environ["KUSTOMIZATION_PATH"])
           content = path.read_text()
           updated, count = re.subn(
-              r"(^\s*image:\s*registry\.144\.91\.77\.245\.sslip\.io/dokploy-fleet-artemis-2-wallpaper-artemis-2-wallpaper:).*$",
+              r"(^\s*newTag:\s*).*$",
               rf"\1{os.environ['IMAGE_TAG']}",
               content,
               count=1,
               flags=re.MULTILINE,
           )
           if count != 1:
-              raise SystemExit("Expected exactly one image line to update in the fleet deployment manifest.")
+              raise SystemExit("expected exactly one newTag entry in production kustomization")
           path.write_text(updated)
           PY
 
-      - name: Commit fleet update
+      - name: Commit release manifest update
         env:
-          IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+          KUSTOMIZATION_PATH: ${{ env.KUSTOMIZATION_PATH }}
         run: |
-          cd k8s-fleet
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "$FLEET_TENANT_PATH"
-          if git diff --cached --quiet; then
+          if git diff --quiet -- "$KUSTOMIZATION_PATH"; then
             exit 0
           fi
-          git commit -m "chore: release artemis-2-wallpaper ${IMAGE_TAG}"
-          git push origin HEAD:main
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$KUSTOMIZATION_PATH"
+          git commit -m "chore: release ${IMAGE_TAG} [skip ci]"
+          git push origin HEAD:${APP_BRANCH}
+
+      - name: Apply Argo CD project and application
+        run: |
+          kubectl apply -f deploy/argocd/project.yaml
+          kubectl apply -f deploy/argocd/application.yaml
+
+      - name: Wait for Argo CD sync
+        env:
+          APP_NAME: ${{ env.APP_NAME }}
+        run: |
+          for attempt in $(seq 1 60); do
+            sync_status="$(kubectl -n argocd get application "$APP_NAME" -o jsonpath='{.status.sync.status}' 2>/dev/null || true)"
+            health_status="$(kubectl -n argocd get application "$APP_NAME" -o jsonpath='{.status.health.status}' 2>/dev/null || true)"
+            if [ "$sync_status" = "Synced" ] && [ "$health_status" = "Healthy" ]; then
+              echo "Application is synced and healthy."
+              exit 0
+            fi
+            sleep 10
+          done
+          kubectl -n argocd get application "$APP_NAME" -o yaml
+          exit 1

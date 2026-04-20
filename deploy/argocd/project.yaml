@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: vibeisland
+  namespace: argocd
+spec:
+  description: Vibe Island static site managed from the application repository.
+  sourceRepos:
+    - https://github.com/gateszhangc/vibeisland.git
+  destinations:
+    - namespace: vibeisland
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"

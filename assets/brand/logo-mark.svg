@@ -1,0 +1,40 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="80" y1="72" x2="432" y2="448" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B1F23"/>
+      <stop offset="0.55" stop-color="#112A31"/>
+      <stop offset="1" stop-color="#081116"/>
+    </linearGradient>
+    <linearGradient id="line" x1="128" y1="128" x2="384" y2="384" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8EF0D1"/>
+      <stop offset="1" stop-color="#59BEE8"/>
+    </linearGradient>
+    <linearGradient id="sun" x1="176" y1="188" x2="336" y2="240" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFD18D"/>
+      <stop offset="1" stop-color="#FF9C72"/>
+    </linearGradient>
+    <filter id="glow" x="82" y="74" width="348" height="322" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect x="32" y="32" width="448" height="448" rx="112" fill="url(#bg)"/>
+  <rect x="94" y="96" width="324" height="122" rx="61" fill="#050C11"/>
+  <rect x="116" y="114" width="280" height="86" rx="43" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
+
+  <g filter="url(#glow)">
+    <path d="M176 228C194 205 223 192 256 192C289 192 318 205 336 228" stroke="url(#sun)" stroke-width="18" stroke-linecap="round"/>
+    <circle cx="256" cy="192" r="10" fill="#FF9C72"/>
+    <path d="M146 310C188 278 324 278 366 310" stroke="url(#line)" stroke-width="24" stroke-linecap="round"/>
+    <path d="M172 346C204 330 308 330 340 346" stroke="#CFFFF1" stroke-width="10" stroke-linecap="round"/>
+    <path d="M212 148C224 136 244 130 256 130C268 130 288 136 300 148" stroke="url(#line)" stroke-width="8" stroke-linecap="round"/>
+    <path d="M222 162C232 154 246 150 256 150C266 150 280 154 290 162" stroke="#DDFEFA" stroke-width="6" stroke-linecap="round"/>
+  </g>
+
+  <circle cx="256" cy="311" r="7" fill="#071316"/>
+  <circle cx="256" cy="311" r="4" fill="#CFFFF1"/>
+</svg>
