@@ -9,4 +9,4 @@ resources:
   - sealedsecret-cloudflare-api-token.yaml
 images:
   - name: registry.144.91.77.245.sslip.io/vibeisland
-    newTag: c91981fca58d58aaa0e2a2fca65ffffdfd68a339
+    newTag: d3573a0379215c77169596e2970ab850fd32237a
