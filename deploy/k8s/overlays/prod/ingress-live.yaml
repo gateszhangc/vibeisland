@@ -3,9 +3,7 @@ kind: Ingress
 metadata:
   name: vibeisland-live
   annotations:
-    acme.cert-manager.io/http01-edit-in-place: "true"
-    cert-manager.io/cluster-issuer: letsencrypt-prod
-    cert-manager.io/issue-temporary-certificate: "true"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/from-to-www-redirect: "true"
 spec:
   ingressClassName: nginx
@@ -13,6 +11,7 @@ spec:
     - secretName: vibeisland-live-tls
       hosts:
         - vibeisland.lol
+        - www.vibeisland.lol
   rules:
     - host: vibeisland.lol
       http:

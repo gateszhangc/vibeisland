@@ -2,8 +2,11 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../base
+  - certificate-live.yaml
   - ingress-live.yaml
   - ingress-preview.yaml
+  - issuer-live-dns01.yaml
+  - sealedsecret-cloudflare-api-token.yaml
 images:
   - name: registry.144.91.77.245.sslip.io/vibeisland
     newTag: cc33306720f64c94bcf4c32a71165e9227e00d1b
