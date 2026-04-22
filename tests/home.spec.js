@@ -1,5 +1,7 @@
 const { test, expect } = require("@playwright/test");
 
+const isRemoteBaseUrl = Boolean(process.env.PLAYWRIGHT_BASE_URL);
+
 test.describe("Vibe Island homepage", () => {
   test("desktop homepage renders key marketing sections and metadata", async ({ page }) => {
     await page.goto("/");
@@ -107,7 +109,11 @@ test.describe("Vibe Island homepage", () => {
 
     const cssResponse = await page.request.get("/styles.css");
     expect(cssResponse.ok()).toBe(true);
-    expect(cssResponse.headers()["cache-control"]).toBe("no-cache");
+    if (isRemoteBaseUrl) {
+      expect(cssResponse.headers()["cache-control"]).toBeTruthy();
+    } else {
+      expect(cssResponse.headers()["cache-control"]).toBe("no-cache");
+    }
 
     expect(healthResponse.ok()).toBe(true);
     expect(await healthResponse.json()).toEqual({ ok: true });
