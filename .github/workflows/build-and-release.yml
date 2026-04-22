@@ -98,10 +98,18 @@ jobs:
 
       - name: Derive build metadata
         id: meta
+        env:
+          ENVIRONMENT: ${{ steps.target.outputs.environment }}
+          KUSTOMIZATION_PATH: ${{ steps.target.outputs.kustomization_path }}
         run: |
-          short_sha="${GITHUB_SHA::12}"
-          echo "image_tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-          echo "image_ref=${IMAGE_REPOSITORY}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          if [ "$ENVIRONMENT" = "production" ]; then
+            image_tag="$(python3 -c 'import os,re; from pathlib import Path; content = Path(os.environ["KUSTOMIZATION_PATH"]).read_text(); match = re.search(r"^\s*newTag:\s*(\S+)\s*$", content, re.MULTILINE); print(match.group(1) if match else (_ for _ in ()).throw(SystemExit("expected exactly one newTag entry in release kustomization")))' )"
+          else
+            image_tag="${GITHUB_SHA}"
+          fi
+          short_sha="${image_tag::12}"
+          echo "image_tag=${image_tag}" >> "$GITHUB_OUTPUT"
+          echo "image_ref=${IMAGE_REPOSITORY}:${image_tag}" >> "$GITHUB_OUTPUT"
           echo "build_job_name=vibeisland-build-${short_sha}" >> "$GITHUB_OUTPUT"
           echo "git_context=git://github.com/${GITHUB_REPOSITORY}.git#refs/heads/${GITHUB_REF_NAME}#${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
