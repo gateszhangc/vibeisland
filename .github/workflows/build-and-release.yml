@@ -196,12 +196,16 @@ jobs:
           SITEMAP_URL: ${{ steps.target.outputs.sitemap_url }}
           WWW_URL: ${{ steps.target.outputs.www_url }}
         run: |
+          expected_revision="$(git rev-parse HEAD)"
+          kubectl -n argocd annotate application "$APP_NAME" argocd.argoproj.io/refresh=hard --overwrite
           ready=false
           for attempt in $(seq 1 60); do
             sync_status="$(kubectl -n argocd get application "$APP_NAME" -o jsonpath='{.status.sync.status}' 2>/dev/null || true)"
             health_status="$(kubectl -n argocd get application "$APP_NAME" -o jsonpath='{.status.health.status}' 2>/dev/null || true)"
-            echo "attempt=$attempt sync=$sync_status health=$health_status"
-            if [ "$sync_status" = "Synced" ] && [ "$health_status" = "Healthy" ]; then
+            sync_revision="$(kubectl -n argocd get application "$APP_NAME" -o jsonpath='{.status.sync.revision}' 2>/dev/null || true)"
+            deployed_image="$(kubectl -n "$APP_NAMESPACE" get deployment "$DEPLOYMENT_NAME" -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || true)"
+            echo "attempt=$attempt sync=$sync_status health=$health_status revision=$sync_revision image=$deployed_image"
+            if [ "$sync_status" = "Synced" ] && [ "$health_status" = "Healthy" ] && [ "$sync_revision" = "$expected_revision" ] && [ "$deployed_image" = "$IMAGE_REF" ]; then
               ready=true
               break
             fi
@@ -209,6 +213,7 @@ jobs:
           done
           if [ "$ready" != "true" ]; then
             kubectl -n argocd get application "$APP_NAME" -o yaml
+            kubectl -n "$APP_NAMESPACE" get deployment "$DEPLOYMENT_NAME" -o yaml || true
             exit 1
           fi
           kubectl -n "$APP_NAMESPACE" rollout status deployment/"$DEPLOYMENT_NAME" --timeout=5m
