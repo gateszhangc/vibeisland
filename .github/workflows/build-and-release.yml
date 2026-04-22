@@ -4,13 +4,14 @@ on:
   push:
     branches:
       - main
+      - staging
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: vibeisland-release
+  group: vibeisland-release-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -18,22 +19,26 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip ci]')
     runs-on: ubuntu-latest
     env:
-      APP_NAME: vibeisland
-      APP_NAMESPACE: vibeisland
       APP_REPO_URL: https://github.com/gateszhangc/vibeisland.git
-      APP_BRANCH: main
       BUILD_JOB_NAMESPACE: dokploy-fleet-build
       BUILD_JOB_SECRET: fleet-registry-push
       IMAGE_REPOSITORY: registry.144.91.77.245.sslip.io/vibeisland
-      KUSTOMIZATION_PATH: deploy/k8s/overlays/prod/kustomization.yaml
-      PRIMARY_URL: https://vibeisland.lol/
-      SITEMAP_URL: https://vibeisland.lol/sitemap.xml
-      WWW_URL: https://www.vibeisland.lol/
     steps:
       - name: Check out code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install browser test dependencies
+        run: |
+          npm ci
+          npx playwright install chromium
 
       - name: Configure kubectl
         env:
@@ -46,15 +51,89 @@ jobs:
           kubectl version --client
           kubectl cluster-info
 
+      - name: Configure registry auth from cluster
+        run: |
+          mkdir -p "$HOME/.docker"
+          kubectl -n vibeisland get secret dokploy-fleet-ghcr -o jsonpath='{.data.\.dockerconfigjson}' | base64 --decode > "$HOME/.docker/config.json"
+          chmod 600 "$HOME/.docker/config.json"
+
+      - name: Derive release target
+        id: target
+        run: |
+          branch="${GITHUB_REF_NAME}"
+          case "$branch" in
+            main)
+              {
+                echo "environment=production"
+                echo "app_name=vibeisland"
+                echo "app_namespace=vibeisland"
+                echo "deployment_name=vibeisland"
+                echo "app_branch=main"
+                echo "argo_application_manifest=deploy/argocd/application.yaml"
+                echo "kustomization_path=deploy/k8s/overlays/prod/kustomization.yaml"
+                echo "primary_url=https://vibeisland.lol/"
+                echo "sitemap_url=https://vibeisland.lol/sitemap.xml"
+                echo "www_url=https://www.vibeisland.lol/"
+              } >> "$GITHUB_OUTPUT"
+              ;;
+            staging)
+              {
+                echo "environment=staging"
+                echo "app_name=vibeisland-staging"
+                echo "app_namespace=vibeisland-staging"
+                echo "deployment_name=vibeisland"
+                echo "app_branch=staging"
+                echo "argo_application_manifest=deploy/argocd/application-staging.yaml"
+                echo "kustomization_path=deploy/k8s/overlays/staging/kustomization.yaml"
+                echo "primary_url=https://staging.vibeisland.lol/"
+                echo "sitemap_url=https://staging.vibeisland.lol/sitemap.xml"
+                echo "www_url="
+              } >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Unsupported release branch: $branch" >&2
+              exit 1
+              ;;
+          esac
+
       - name: Derive build metadata
         id: meta
+        env:
+          ENVIRONMENT: ${{ steps.target.outputs.environment }}
+          KUSTOMIZATION_PATH: ${{ steps.target.outputs.kustomization_path }}
         run: |
-          short_sha="${GITHUB_SHA::12}"
-          echo "image_tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-          echo "build_job_name=${APP_NAME}-build-${short_sha}" >> "$GITHUB_OUTPUT"
+          if [ "$ENVIRONMENT" = "production" ]; then
+            image_tag="$(python3 -c 'import os,re; from pathlib import Path; content = Path(os.environ["KUSTOMIZATION_PATH"]).read_text(); match = re.search(r"^\s*newTag:\s*(\S+)\s*$", content, re.MULTILINE); print(match.group(1) if match else (_ for _ in ()).throw(SystemExit("expected exactly one newTag entry in release kustomization")))' )"
+          else
+            image_tag="${GITHUB_SHA}"
+          fi
+          short_sha="${image_tag::12}"
+          echo "image_tag=${image_tag}" >> "$GITHUB_OUTPUT"
+          echo "image_ref=${IMAGE_REPOSITORY}:${image_tag}" >> "$GITHUB_OUTPUT"
+          echo "build_job_name=vibeisland-build-${short_sha}" >> "$GITHUB_OUTPUT"
           echo "git_context=git://github.com/${GITHUB_REPOSITORY}.git#refs/heads/${GITHUB_REF_NAME}#${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
+      - name: Check release image availability
+        id: image
+        env:
+          IMAGE_REF: ${{ steps.meta.outputs.image_ref }}
+        run: |
+          if docker manifest inspect "$IMAGE_REF" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Require a validated staging image for production promotion
+        if: steps.target.outputs.environment == 'production' && steps.image.outputs.exists != 'true'
+        env:
+          IMAGE_REF: ${{ steps.meta.outputs.image_ref }}
+        run: |
+          echo "Validated staging artifact not found for production promotion: $IMAGE_REF" >&2
+          exit 1
+
       - name: Run K8s build job
+        if: steps.image.outputs.exists != 'true'
         env:
           BUILD_JOB_NAME: ${{ steps.meta.outputs.build_job_name }}
           BUILD_CONTEXT: ${{ steps.meta.outputs.git_context }}
@@ -68,10 +147,10 @@ jobs:
           kubectl wait -n "$BUILD_JOB_NAMESPACE" --for=condition=complete "job/$BUILD_JOB_NAME" --timeout=30m
           kubectl logs -n "$BUILD_JOB_NAMESPACE" "job/$BUILD_JOB_NAME" --tail=-1 || true
 
-      - name: Update production image tag
+      - name: Update release image tag
         env:
           IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
-          KUSTOMIZATION_PATH: ${{ env.KUSTOMIZATION_PATH }}
+          KUSTOMIZATION_PATH: ${{ steps.target.outputs.kustomization_path }}
         run: |
           python3 - <<'PY'
           import os
@@ -88,14 +167,15 @@ jobs:
               flags=re.MULTILINE,
           )
           if count != 1:
-              raise SystemExit("expected exactly one newTag entry in production kustomization")
+              raise SystemExit("expected exactly one newTag entry in release kustomization")
           path.write_text(updated)
           PY
 
       - name: Commit release manifest update
         env:
           IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
-          KUSTOMIZATION_PATH: ${{ env.KUSTOMIZATION_PATH }}
+          APP_BRANCH: ${{ steps.target.outputs.app_branch }}
+          KUSTOMIZATION_PATH: ${{ steps.target.outputs.kustomization_path }}
         run: |
           if git diff --quiet -- "$KUSTOMIZATION_PATH"; then
             exit 0
@@ -106,53 +186,81 @@ jobs:
           git commit -m "chore: release ${IMAGE_TAG} [skip ci]"
           git push origin HEAD:${APP_BRANCH}
 
-      - name: Apply shared cluster resources and Argo CD application
+      - name: Apply shared cluster resources and Argo CD configuration
+        env:
+          ARGO_APPLICATION_MANIFEST: ${{ steps.target.outputs.argo_application_manifest }}
         run: |
           kubectl apply -f deploy/shared/cert-manager/sealedsecret-cloudflare-api-token.yaml
           kubectl apply -f deploy/argocd/project.yaml
-          kubectl apply -f deploy/argocd/application.yaml
+          kubectl apply -f "$ARGO_APPLICATION_MANIFEST"
 
-      - name: Wait for Argo CD sync and verify live endpoints
+      - name: Wait for Argo CD sync and verify deployed endpoints
         env:
-          APP_NAME: ${{ env.APP_NAME }}
-          APP_NAMESPACE: ${{ env.APP_NAMESPACE }}
-          PRIMARY_URL: ${{ env.PRIMARY_URL }}
-          SITEMAP_URL: ${{ env.SITEMAP_URL }}
-          WWW_URL: ${{ env.WWW_URL }}
+          APP_NAME: ${{ steps.target.outputs.app_name }}
+          APP_NAMESPACE: ${{ steps.target.outputs.app_namespace }}
+          DEPLOYMENT_NAME: ${{ steps.target.outputs.deployment_name }}
+          IMAGE_REF: ${{ steps.meta.outputs.image_ref }}
+          PRIMARY_URL: ${{ steps.target.outputs.primary_url }}
+          SITEMAP_URL: ${{ steps.target.outputs.sitemap_url }}
+          WWW_URL: ${{ steps.target.outputs.www_url }}
         run: |
-          synced=false
+          expected_revision="$(git rev-parse HEAD)"
+          kubectl -n argocd annotate application "$APP_NAME" argocd.argoproj.io/refresh=hard --overwrite
+          ready=false
           for attempt in $(seq 1 60); do
             sync_status="$(kubectl -n argocd get application "$APP_NAME" -o jsonpath='{.status.sync.status}' 2>/dev/null || true)"
             health_status="$(kubectl -n argocd get application "$APP_NAME" -o jsonpath='{.status.health.status}' 2>/dev/null || true)"
-            echo "attempt=$attempt sync=$sync_status health=$health_status"
-            if [ "$sync_status" = "Synced" ]; then
-              synced=true
+            sync_revision="$(kubectl -n argocd get application "$APP_NAME" -o jsonpath='{.status.sync.revision}' 2>/dev/null || true)"
+            deployed_image="$(kubectl -n "$APP_NAMESPACE" get deployment "$DEPLOYMENT_NAME" -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || true)"
+            echo "attempt=$attempt sync=$sync_status health=$health_status revision=$sync_revision image=$deployed_image"
+            if [ "$sync_status" = "Synced" ] && [ "$health_status" = "Healthy" ] && [ "$sync_revision" = "$expected_revision" ] && [ "$deployed_image" = "$IMAGE_REF" ]; then
+              ready=true
               break
             fi
             sleep 10
           done
-          if [ "$synced" != "true" ]; then
+          if [ "$ready" != "true" ]; then
             kubectl -n argocd get application "$APP_NAME" -o yaml
+            kubectl -n "$APP_NAMESPACE" get deployment "$DEPLOYMENT_NAME" -o yaml || true
             exit 1
           fi
-          kubectl -n "$APP_NAMESPACE" rollout status deployment/"$APP_NAME" --timeout=5m
+          kubectl -n "$APP_NAMESPACE" rollout status deployment/"$DEPLOYMENT_NAME" --timeout=5m
+          deployed_image="$(kubectl -n "$APP_NAMESPACE" get deployment "$DEPLOYMENT_NAME" -o jsonpath='{.spec.template.spec.containers[0].image}')"
+          if [ "$deployed_image" != "$IMAGE_REF" ]; then
+            echo "deployed image mismatch: expected $IMAGE_REF got $deployed_image"
+            exit 1
+          fi
           primary_status="$(curl -sSIL -o /dev/null -w '%{http_code}' "$PRIMARY_URL")"
           if [ "$primary_status" != "200" ]; then
             echo "primary url check failed: $PRIMARY_URL -> $primary_status"
             exit 1
           fi
+          health_status="$(curl -sS -o /tmp/vibeisland-health.json -w '%{http_code}' "${PRIMARY_URL}healthz")"
+          if [ "$health_status" != "200" ]; then
+            echo "health check failed: ${PRIMARY_URL}healthz -> $health_status"
+            cat /tmp/vibeisland-health.json
+            exit 1
+          fi
+          grep -q '"ok":true' /tmp/vibeisland-health.json
           sitemap_status="$(curl -sSIL -o /dev/null -w '%{http_code}' "$SITEMAP_URL")"
           if [ "$sitemap_status" != "200" ]; then
             echo "sitemap check failed: $SITEMAP_URL -> $sitemap_status"
             exit 1
           fi
-          www_headers="$(mktemp)"
-          curl -sSI "$WWW_URL" > "$www_headers"
-          if ! grep -Eiq '^location: https://vibeisland\.lol(:443)?/?' "$www_headers"; then
-            echo "www redirect check failed"
-            cat "$www_headers"
+          if [ -n "$WWW_URL" ]; then
+            www_headers="$(mktemp)"
+            curl -sSI "$WWW_URL" > "$www_headers"
+            if ! grep -Eiq '^location: https://vibeisland\.lol(:443)?/?' "$www_headers"; then
+              echo "www redirect check failed"
+              cat "$www_headers"
+              rm -f "$www_headers"
+              exit 1
+            fi
             rm -f "$www_headers"
-            exit 1
           fi
-          rm -f "$www_headers"
           kubectl -n argocd get application "$APP_NAME" -o yaml
+
+      - name: Run browser smoke against the deployed environment
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ steps.target.outputs.primary_url }}
+        run: npm test

@@ -7,7 +7,9 @@
     "start": "node server.js",
     "brand": "python3 scripts/generate_brand_assets.py",
     "test": "playwright test",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "test:staging": "PLAYWRIGHT_BASE_URL=https://staging.vibeisland.lol playwright test",
+    "test:live": "PLAYWRIGHT_BASE_URL=https://vibeisland.lol playwright test"
   },
   "devDependencies": {
     "@playwright/test": "^1.54.2"
