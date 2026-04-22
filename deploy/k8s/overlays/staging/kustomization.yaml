@@ -11,4 +11,4 @@ resources:
   - ingress-staging.yaml
 images:
   - name: registry.144.91.77.245.sslip.io/vibeisland
-    newTag: 596f777ca3b03f13efb37873944ba5cdb9298c10
+    newTag: c85d0990faaa7cdec0e16f3707ae3f49c661bc3c
