@@ -38,7 +38,7 @@ jobs:
       - name: Install browser test dependencies
         run: |
           npm ci
-          npx playwright install --with-deps chromium
+          npx playwright install chromium
 
       - name: Configure kubectl
         env:
