@@ -1,7 +1,8 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: vibeisland
+  name: vibeisland-staging
   labels:
     app.kubernetes.io/name: vibeisland
     app.kubernetes.io/part-of: vibeisland
+    app.kubernetes.io/environment: staging

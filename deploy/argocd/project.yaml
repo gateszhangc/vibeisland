@@ -10,6 +10,8 @@ spec:
   destinations:
     - namespace: vibeisland
       server: https://kubernetes.default.svc
+    - namespace: vibeisland-staging
+      server: https://kubernetes.default.svc
   clusterResourceWhitelist:
     - group: "*"
       kind: "*"

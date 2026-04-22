@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vibeisland-staging
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: vibeisland
+  source:
+    repoURL: https://github.com/gateszhangc/vibeisland.git
+    targetRevision: staging
+    path: deploy/k8s/overlays/staging
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vibeisland-staging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

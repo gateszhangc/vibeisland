@@ -47,7 +47,9 @@ const serveFile = (requestPath, response) => {
     }
 
     const ext = path.extname(resolvedPath).toLowerCase();
-    const cacheControl = ext === ".html" ? "no-cache" : "public, max-age=31536000, immutable";
+    const cacheControl = [".css", ".html", ".js", ".json", ".webmanifest", ".xml"].includes(ext)
+      ? "no-cache"
+      : "public, max-age=31536000, immutable";
 
     send(
       response,

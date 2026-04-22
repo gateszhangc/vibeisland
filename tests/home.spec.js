@@ -44,6 +44,46 @@ test.describe("Vibe Island homepage", () => {
     expect(imagesLoaded).toBe(true);
   });
 
+  test("download preview navigates to the external preview site", async ({ page }) => {
+    await page.route("https://mirofish.my/", async (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: "<h1>Mirofish preview</h1>"
+      })
+    );
+
+    await page.goto("/");
+
+    const downloadPreview = page.getByRole("link", { name: "Download preview" });
+    await expect(downloadPreview).toHaveAttribute("href", "https://mirofish.my/");
+
+    await Promise.all([page.waitForURL("https://mirofish.my/"), downloadPreview.click()]);
+    await expect(page.locator("h1")).toHaveText("Mirofish preview");
+  });
+
+  test("desktop product preview stays inside the hero visual panel", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto("/");
+
+    const bounds = await page.evaluate(() => {
+      const panel = document.querySelector(".hero-visual")?.getBoundingClientRect();
+      const preview = document.querySelector(".notch-preview")?.getBoundingClientRect();
+
+      return {
+        panel: panel ? { left: panel.left, right: panel.right, top: panel.top, bottom: panel.bottom } : null,
+        preview: preview ? { left: preview.left, right: preview.right, top: preview.top, bottom: preview.bottom } : null
+      };
+    });
+
+    expect(bounds.panel).not.toBeNull();
+    expect(bounds.preview).not.toBeNull();
+    expect(bounds.preview.left).toBeGreaterThanOrEqual(bounds.panel.left);
+    expect(bounds.preview.right).toBeLessThanOrEqual(bounds.panel.right);
+    expect(bounds.preview.top).toBeGreaterThanOrEqual(bounds.panel.top);
+    expect(bounds.preview.bottom).toBeLessThanOrEqual(bounds.panel.bottom);
+  });
+
   test("seo support files stay accessible and aligned with the production domain", async ({ page }) => {
     const robotsResponse = await page.request.get("/robots.txt");
     const sitemapResponse = await page.request.get("/sitemap.xml");
@@ -64,6 +104,10 @@ test.describe("Vibe Island homepage", () => {
       scope: "/",
       start_url: "/"
     });
+
+    const cssResponse = await page.request.get("/styles.css");
+    expect(cssResponse.ok()).toBe(true);
+    expect(cssResponse.headers()["cache-control"]).toBe("no-cache");
 
     expect(healthResponse.ok()).toBe(true);
     expect(await healthResponse.json()).toEqual({ ok: true });
