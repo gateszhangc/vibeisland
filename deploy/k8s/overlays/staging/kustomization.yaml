@@ -4,6 +4,9 @@ namespace: vibeisland-staging
 resources:
   - namespace.yaml
   - ../../base
+  - certificate-staging.yaml
+  - issuer-staging-dns01.yaml
+  - sealedsecret-cloudflare-api-token.yaml
   - sealedsecret-dokploy-fleet-ghcr.yaml
   - ingress-staging.yaml
 images:
