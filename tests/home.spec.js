@@ -46,7 +46,7 @@ test.describe("Vibe Island homepage", () => {
     expect(imagesLoaded).toBe(true);
   });
 
-  test("download preview navigates to the external preview site", async ({ page }) => {
+  test("hero CTAs navigate to the external preview site", async ({ page }) => {
     await page.route("https://mirofish.my/", async (route) =>
       route.fulfill({
         status: 200,
@@ -58,9 +58,15 @@ test.describe("Vibe Island homepage", () => {
     await page.goto("/");
 
     const downloadPreview = page.getByRole("link", { name: "Download preview" });
+    const seePricing = page.getByRole("link", { name: "See pricing" });
     await expect(downloadPreview).toHaveAttribute("href", "https://mirofish.my/");
+    await expect(seePricing).toHaveAttribute("href", "https://mirofish.my/");
 
     await Promise.all([page.waitForURL("https://mirofish.my/"), downloadPreview.click()]);
+    await expect(page.locator("h1")).toHaveText("Mirofish preview");
+
+    await page.goto("/");
+    await Promise.all([page.waitForURL("https://mirofish.my/"), seePricing.click()]);
     await expect(page.locator("h1")).toHaveText("Mirofish preview");
   });
 
@@ -129,8 +135,11 @@ test.describe("Vibe Island homepage", () => {
     await page.goto("/");
 
     await expect(page.getByRole("link", { name: "Download preview" })).toBeVisible();
-    await page.getByRole("link", { name: "See pricing" }).click();
-    await expect(page.locator("#pricing")).toBeInViewport();
+    await expect(page.getByRole("link", { name: "See pricing" })).toHaveAttribute("href", "https://mirofish.my/");
+
+    const pricingSection = page.locator("#pricing");
+    await pricingSection.scrollIntoViewIfNeeded();
+    await expect(pricingSection).toBeInViewport();
 
     const localFaq = page.locator("details", {
       has: page.locator("summary", { hasText: "Does my data leave my machine?" })
